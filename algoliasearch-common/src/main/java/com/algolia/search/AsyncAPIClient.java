@@ -11,6 +11,7 @@ import com.algolia.search.inputs.batch.BatchDeleteObjectOperation;
 import com.algolia.search.inputs.batch.BatchPartialUpdateObjectOperation;
 import com.algolia.search.inputs.batch.BatchUpdateObjectOperation;
 import com.algolia.search.inputs.partial_update.PartialUpdateOperation;
+import com.algolia.search.inputs.query_rules.Rule;
 import com.algolia.search.inputs.synonym.AbstractSynonym;
 import com.algolia.search.objects.*;
 import com.algolia.search.objects.tasks.async.*;
@@ -804,7 +805,7 @@ public class AsyncAPIClient {
     );
 
     return httpClient
-      .requestWithRetry(algoliaRequest.setData(new Search(query)))
+      .requestWithRetry(algoliaRequest.setData(query))
       .thenCompose(result -> {
         CompletableFuture<SearchResult<T>> r = new CompletableFuture<>();
         if (result == null) { //Special case when the index does not exists
@@ -953,7 +954,84 @@ public class AsyncAPIClient {
         Arrays.asList("1", "indexes", indexName, "facets", facetName, "query"),
         requestOptions,
         SearchFacetResult.class
-      ).setData(new Search(query))
+      ).setData(query)
     );
   }
+
+  CompletableFuture<AsyncTask> saveRule(String indexName, String queryRuleID, Rule queryRule, Boolean forwardToReplicas, RequestOptions requestOptions) {
+    return httpClient.requestWithRetry(
+      new AlgoliaRequest<>(
+        HttpMethod.PUT,
+        false,
+        Arrays.asList("1", "indexes", indexName, "Rules", queryRuleID),
+        requestOptions,
+        AsyncTask.class
+      ).setParameters(ImmutableMap.of("forwardToReplicas", forwardToReplicas.toString())).setData(queryRule)
+    ).thenApply(s -> s.setIndex(indexName));
+  }
+
+  CompletableFuture<Optional<Rule>> getRule(String indexName, String queryRuleID, RequestOptions requestOptions) {
+    return httpClient
+      .requestWithRetry(
+        new AlgoliaRequest<>(
+          HttpMethod.GET,
+          false,
+          Arrays.asList("1", "indexes", indexName, "Rules", queryRuleID),
+          requestOptions,
+          Rule.class
+        )
+      )
+      .thenApply(Optional::ofNullable);
+  }
+
+  CompletableFuture<AsyncTask> deleteRule(String indexName, String queryRuleID, Boolean forwardToReplicas, RequestOptions requestOptions) {
+    return httpClient.requestWithRetry(
+      new AlgoliaRequest<>(
+        HttpMethod.DELETE,
+        false,
+        Arrays.asList("1", "indexes", indexName, "Rules", queryRuleID),
+        requestOptions,
+        AsyncTask.class
+      ).setParameters(ImmutableMap.of("forwardToReplicas", forwardToReplicas.toString()))
+    ).thenApply(s -> s.setIndex(indexName));
+  }
+
+  CompletableFuture<AsyncTask> clearRules(String indexName, Boolean forwardToReplicas, RequestOptions requestOptions) {
+    return httpClient.requestWithRetry(
+      new AlgoliaRequest<>(
+        HttpMethod.POST,
+        false,
+        Arrays.asList("1", "indexes", indexName, "Rules", "clear"),
+        requestOptions,
+        AsyncTask.class
+      ).setParameters(ImmutableMap.of("forwardToReplicas", forwardToReplicas.toString()))
+    ).thenApply(s -> s.setIndex(indexName));
+  }
+
+  CompletableFuture<SearchRuleResult> searchRules(String indexName, RuleQuery query, RequestOptions requestOptions) {
+    return httpClient.requestWithRetry(
+      new AlgoliaRequest<>(
+        HttpMethod.POST,
+        false,
+        Arrays.asList("1", "indexes", indexName, "Rules", "search"),
+        requestOptions,
+        SearchRuleResult.class
+      ).setData(query)
+    );
+  }
+
+  CompletableFuture<AsyncTask> batchRules(String indexName, List<Rule> rules, Boolean forwardToReplicas, Boolean clearExistingRules, RequestOptions requestOptions) {
+    return httpClient.requestWithRetry(
+      new AlgoliaRequest<>(
+        HttpMethod.POST,
+        false,
+        Arrays.asList("1", "indexes", indexName, "Rules", "batch"),
+        requestOptions,
+        AsyncTask.class
+      )
+        .setParameters(ImmutableMap.of("forwardToReplicas", forwardToReplicas.toString(), "clearExistingRules", clearExistingRules.toString()))
+        .setData(rules)
+    ).thenApply(s -> s.setIndex(indexName));
+  }
+
 }
